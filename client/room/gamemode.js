@@ -1,5 +1,5 @@
 import { DisplayValueHeader, Color, Vector3 } from 'pixel_combats/basic';
-import { Game, Map, Bots, MapEditor, Players, Inventory, LeaderBoard, BuildBlocksSet, Teams, Damage, BreackGraph, Ui, Properties, GameMode, Spawns, Timers, TeamsBalancer, Build, AreaService, AreaPlayerTriggerService, AreaViewService, Chat } from 'pixel_combats/room';
+import { Game, Map, Bots, MapEditor, Players, Inventory, LeaderBoard, BuildBlocksSet, Teams, Damage, BreackGraph, Ui, Properties, GameMode, Spawns, Timers, TeamsBalancer, Build, AreaService, AreaPlayerTriggerService, AreaViewService, Chat, room } from 'pixel_combats/room';
 
 const ADMIN_ID = "D411BD94CAE31F89";
 
@@ -40,7 +40,7 @@ LeaderBoard.PlayersWeightGetter.Set(function(p) {
     return p.Properties.Get('Scores').Value;
 });
 
-room.PopupEnabled = true;
+room.PopupsEnabled = true;
 Damage.GetContext().FriendlyFire.Value = true;
 BreackGraph.OnlyPlayerBlocksDmg = true;
 BreackGraph.WeakBlocks = false;
