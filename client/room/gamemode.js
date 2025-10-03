@@ -40,7 +40,7 @@ LeaderBoard.PlayersWeightGetter.Set(function(p) {
     return p.Properties.Get('Scores').Value;
 });
 
-
+room.PopupsEnabled = true;
 Damage.GetContext().FriendlyFire.Value = true;
 BreackGraph.OnlyPlayerBlocksDmg = true;
 BreackGraph.WeakBlocks = false;
@@ -1183,18 +1183,4 @@ Timers.OnTimer.Add(function(timer) {
         // Обновление количества игроков
         Props.Get('Players_Now').Value = Players.GetAll().length;
     }
-});
-
-// Инициализация сервера
-Game.OnStart.Add(function() {
-    console.log('Сервер запущен! Режим: Sandbox с системой зон и чат-командами');
-    
-    // Автоматическое сохранение каждые 5 минут
-    Timers.Get('autoSave').RestartLoop(300);
-    Timers.OnTimer.Add(function(timer) {
-        if (timer.Id === 'autoSave') {
-            MapEditor.SaveMap();
-            console.log('Карта автоматически сохранена');
-        }
-    });
 });
