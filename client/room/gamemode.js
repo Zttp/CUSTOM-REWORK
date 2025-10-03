@@ -40,7 +40,7 @@ LeaderBoard.PlayersWeightGetter.Set(function(p) {
     return p.Properties.Get('Scores').Value;
 });
 
-room.PopupsEnabled = true;
+
 Damage.GetContext().FriendlyFire.Value = true;
 BreackGraph.OnlyPlayerBlocksDmg = true;
 BreackGraph.WeakBlocks = false;
