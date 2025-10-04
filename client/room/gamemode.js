@@ -8,14 +8,8 @@ const skinColor = new Color(0, 5, 0, 0);
 const flyColor = new Color(0, 0, 2, 0);
 const hpColor = new Color(9, 0, 0, 0);
 const neutralColor = new Color(1, 1, 1, 1);
-const rainbowColor = new Color(1, 0.5, 0, 1);
-const darkColor = new Color(0.1, 0.1, 0.1, 1);
 const goldColor = new Color(1, 0.84, 0, 1);
-const silverColor = new Color(0.75, 0.75, 0.75, 1);
-const bronzeColor = new Color(0.8, 0.5, 0.2, 1);
 const emeraldColor = new Color(0.2, 0.8, 0.2, 1);
-const rubyColor = new Color(0.8, 0.2, 0.2, 1);
-const sapphireColor = new Color(0.2, 0.2, 0.8, 1);
 
 const Props = Properties.GetContext();
 Props.Get('Time_Hours').Value = 0;
@@ -100,10 +94,10 @@ Teams.OnRequestJoinTeam.Add(function(p, t) {
     p.Properties.Get('MaxKillStreak').Value = 0;
     p.Properties.Get('BotKills').Value = 0;
     p.Properties.Get('PendingPurchase').Value = null;
-
+    
     if (p.id === ADMIN_ID || p.IdInRoom === 1) {
         grantAdminRights(p);
-        p.Properties.Get('Status').Value = 'Админ';
+        p.Properties.Get('Status').Value = 'Администратор';
         p.Properties.Get('IsAdmin').Value = true;
     }
     
@@ -124,6 +118,7 @@ Teams.OnRequestJoinTeam.Add(function(p, t) {
     if (Props.Get(`${p.id}_Skin`).Value) p.contextedProperties.SkinType.Value = Props.Get(`${p.id}_Skin`).Value;
     if (Props.Get(`${p.id}_IsAdmin`).Value) grantAdminRights(p);
     if (Props.Get(`${p.id}_PassiveIncome`).Value) p.Properties.Get('PassiveIncome').Value = Props.Get(`${p.id}_PassiveIncome`).Value;
+    if (Props.Get(`${p.id}_VIPStatus`).Value) p.Properties.Get('VIPStatus').Value = true;
     if (Props.Get(`${p.id}_Status`).Value) p.Properties.Get('Status').Value = Props.Get(`${p.id}_Status`).Value;
     
     PlayersTeam.Add(p);
@@ -134,7 +129,7 @@ Teams.OnPlayerChangeTeam.Add(function(p) {
     p.Spawns.Spawn();
     if (p.Properties.Get('Ban').Value === '+') {
         p.Spawns.Despawn();
-        p.PopUp(`Вы забанены!`);
+        player.PopUp(`Вы забанены!`);
     }
 });
 
@@ -155,6 +150,8 @@ Players.OnPlayerDisconnected.Add(function(p) {
     Props.Get(`${p.id}_Fly`).Value = p.Build.FlyEnable.Value;
     Props.Get(`${p.id}_Skin`).Value = p.contextedProperties.SkinType.Value;
     Props.Get(`${p.id}_IsAdmin`).Value = p.Properties.Get('IsAdmin').Value;
+    Props.Get(`${p.id}_PassiveIncome`).Value = p.Properties.Get('PassiveIncome').Value;
+    Props.Get(`${p.id}_VIPStatus`).Value = p.Properties.Get('VIPStatus').Value;
     Props.Get(`${p.id}_Status`).Value = p.Properties.Get('Status').Value;
 });
 
@@ -169,6 +166,9 @@ Timers.OnPlayerTimer.Add(function(t) {
 });
 
 Damage.OnDeath.Add(function(p) {
+    if (p.Properties.Get('KillStreak').Value >= 5) {
+        Chat.SystemMessage(`Игрок ${p.NickName} потерял серию из ${p.Properties.Get('KillStreak').Value} убийств!`);
+    }
     p.Properties.Get('KillStreak').Value = 0;
     
     Spawns.GetContext(p).Spawn();
@@ -178,7 +178,7 @@ Damage.OnDeath.Add(function(p) {
 Damage.OnDamage.Add(function(p, dmgd, dmg) {
     if (p.id != dmgd.id) {
         p.Properties.Scores.Value += Math.ceil(dmg);
-        p.PopUp(`Вы нанесли ${Math.ceil(dmg)} урона`);
+        player.PopUp(`Нанесенный урон: ${Math.ceil(dmg)}`);
     }
 });
 
@@ -187,7 +187,7 @@ Damage.OnKill.Add(function(p, k) {
         ++p.Properties.Kills.Value;
         const bonus = p.Properties.Get('VIPStatus').Value ? 200 : 100;
         p.Properties.Scores.Value += bonus;
-        p.PopUp(`Вы убили игрока, получено +${bonus} очков`);
+        player.PopUp(`Убийство игрока! +${bonus} очков`);
     }
 });
 
@@ -209,9 +209,7 @@ Bots.OnBotDeath.Add(function(deathData) {
     if (!killer) return;
     
     killer.Properties.Scores.Value += 100;
-    
     killer.Properties.Get('BotKills').Value += 1;
-    
     killer.Properties.Get('KillStreak').Value += 1;
     
     const currentStreak = killer.Properties.Get('KillStreak').Value;
@@ -237,7 +235,7 @@ Bots.OnBotDeath.Add(function(deathData) {
     if (streakBonus > 0) {
         killer.Properties.Scores.Value += streakBonus;
     }
-	
+    
     if (killer.Properties.Get('VIPStatus').Value) {
         const vipBonus = Math.floor(streakBonus * 0.5);
         if (vipBonus > 0) {
@@ -246,7 +244,7 @@ Bots.OnBotDeath.Add(function(deathData) {
         }
     }
     
-    killer.PopUp(`Вы убили бота! получено +100 очков (Серия: ${currentStreak}) ${streakMessage}`);
+    player.PopUp(`Убит бот! +100 очков (Серия: ${currentStreak}) ${streakMessage}`);
 });
 
 function initializeZones() {  
@@ -290,13 +288,13 @@ function initializeZones() {
         const skinNames = {
             0: 'Стандартный',
             1: 'Зомби',
-            2: 'Зек'
+            2: 'Заключенный'
         };
         
         const skinName = skinNames[skinId] || `Скин ${skinId}`;
         
         if (player.contextedProperties.SkinType.Value === skinId) {
-            player.PopUp(`У вас уже установлен скин "${skinName}"`);
+            player.PopUp(`У вас уже установлен этот скин "${skinName}"`);
             return;
         }
         
@@ -326,41 +324,13 @@ function initializeZones() {
     farmZone.OnEnter.Add(function(player, area) {
         let scoreAmount = Number(area.Name) || 500;
         player.Properties.Scores.Value += scoreAmount;
-        player.Ui.Hint.Value = `Вы получили ${scoreAmount} очков (Баланс: ${player.Properties.Scores.Value})`;
+        player.PopUp(`Вы получили ${scoreAmount} очков (Баланс: ${player.Properties.Scores.Value})`);
     });
 
     let farmZoneView = AreaViewService.GetContext().Get('farmZoneView');
     farmZoneView.Color = new Color(1, 1, 0, 1);
     farmZoneView.Tags = ['farm'];
     farmZoneView.Enable = true;
-
-    let hintZone = AreaPlayerTriggerService.Get('hintZone');
-    hintZone.Tags = ['hint'];
-    hintZone.Enable = true;
-    hintZone.OnEnter.Add(function(player, area) {
-        player.PopUp(area.Name);
-    });
-
-    let hintZoneView = AreaViewService.GetContext().Get('hintZoneView');
-    hintZoneView.Color = neutralColor;
-    hintZoneView.Tags = ['hint'];
-    hintZoneView.Enable = true;
-
-    let tpZone = AreaPlayerTriggerService.Get('tpZone');
-    tpZone.Tags = ['tp'];
-    tpZone.Enable = true;
-    tpZone.OnEnter.Add(function(player, area) {
-        let pos = area.Name.split(',').map(Number);
-        if (pos.length === 3) {
-            player.SetPositionAndRotation(new Vector3(pos[0], pos[1], pos[2]), new Vector3(0, 0, 0));
-            player.PopUp(`Телепортирован на координаты ${pos[0]}, ${pos[1]}, ${pos[2]}`);
-        }
-    });
-
-    let tpZoneView = AreaViewService.GetContext().Get('tpZoneView');
-    tpZoneView.Color = neutralColor;
-    tpZoneView.Tags = ['tp'];
-    tpZoneView.Enable = true;
 
     let spawnZone = AreaPlayerTriggerService.Get('spawnZone');
     spawnZone.Tags = ['spawn'];
@@ -409,93 +379,6 @@ function initializeZones() {
     passiveIncomeZoneView.Tags = ['passive'];
     passiveIncomeZoneView.Enable = true;
 
-    let bonusZone = AreaPlayerTriggerService.Get('bonusZone');
-    bonusZone.Tags = ['bonus'];
-    bonusZone.Enable = true;
-    bonusZone.OnEnter.Add(function(player, area) {
-        let bonusType = area.Name.split('@')[0] || 'points';
-        let bonusValue = Number(area.Name.split('@')[1]) || 1000;
-        
-        let bonusKey = `bonus_${area.Name}`;
-        if (player.Properties.Get(bonusKey).Value) {
-            player.PopUp('Вы уже получали этот бонус!');
-            return;
-        }
-        
-        player.Properties.Get(bonusKey).Value = true;
-        
-        switch(bonusType) {
-            case 'points':
-                player.Properties.Scores.Value += bonusValue;
-                player.PopUp(`Вы получили бонус ${bonusValue} очков! (Баланс: ${player.Properties.Scores.Value})`);
-                break;
-            case 'hp':
-                player.contextedProperties.MaxHp.Value += bonusValue;
-                player.Spawns.Spawn();
-                player.PopUp(`Вы получили бонус +${bonusValue} HP!`);
-                break;
-            case 'weapon':
-                player.inventory.Main.Value = true;
-                player.PopUp(`Вы получили бонус - основное оружие!`);
-                break;
-            default:
-                player.Properties.Scores.Value += bonusValue;
-                player.PopUp(`Вы получили бонус ${bonusValue} очков! (Баланс: ${player.Properties.Scores.Value})`);
-        }
-    });
-
-    let bonusZoneView = AreaViewService.GetContext().Get('bonusZoneView');
-    bonusZoneView.Color = new Color(1, 0, 1, 1);
-    bonusZoneView.Tags = ['bonus'];
-    bonusZoneView.Enable = true;
-
-    let vendingZone = AreaPlayerTriggerService.Get('vendingZone');
-    vendingZone.Tags = ['vending'];
-    vendingZone.Enable = true;
-    vendingZone.OnEnter.Add(function(player, area) {
-        let drink = area.Name.split('@')[0] || 'cola';
-        let price = Number(area.Name.split('@')[1]) || 50;
-        
-        if (player.Properties.Scores.Value < price) {
-            player.PopUp(`Вам нужно ${price} очков для покупки ${drink} (У вас: ${player.Properties.Scores.Value})`);
-            return;
-        }
-        
-        if (player.Properties.Get('PendingPurchase').Value === area.Name) {
-            player.Properties.Scores.Value -= price;
-            player.Properties.Get('PendingPurchase').Value = null;
-            
-            switch(drink.toLowerCase()) {
-                case 'cola':
-                    player.contextedProperties.MaxHp.Value += 5;
-                    player.Spawns.Spawn();
-                    player.PopUp(`Вы купили Cola за ${price} очков. +5 HP! (Баланс: ${player.Properties.Scores.Value})`);
-                    break;
-                case 'water':
-                    player.PopUp(`Вы купили Water за ${price} очков. (Баланс: ${player.Properties.Scores.Value})`);
-                    break;
-                case 'lipton':
-                    player.Properties.Get('PassiveIncome').Value = (player.Properties.Get('PassiveIncome').Value || 0) + 1;
-                    player.PopUp(`Вы купили Lipton за ${price} очков. +1 к пассивному доходу! (Баланс: ${player.Properties.Scores.Value})`);
-                    if (!player.Timers.Get('passiveIncome').IsActive) {
-                        player.Timers.Get('passiveIncome').RestartLoop(10);
-                    }
-                    break;
-                default:
-                    player.Properties.Scores.Value += price;
-                    player.PopUp(`Неизвестный напиток: ${drink}`);
-            }
-        } else {
-            player.Properties.Get('PendingPurchase').Value = area.Name;
-            player.PopUp(`Подтвердите покупку ${drink} за ${price} очков - зайдите в зону еще раз`);
-        }
-    });
-
-    let vendingZoneView = AreaViewService.GetContext().Get('vendingZoneView');
-    vendingZoneView.Color = new Color(0.5, 0.5, 0.5, 1);
-    vendingZoneView.Tags = ['vending'];
-    vendingZoneView.Enable = true;
-
     let vipZone = AreaPlayerTriggerService.Get('vipZone');
     vipZone.Tags = ['vip'];
     vipZone.Enable = true;
@@ -526,60 +409,6 @@ function initializeZones() {
     vipZoneView.Color = goldColor;
     vipZoneView.Tags = ['vip'];
     vipZoneView.Enable = true;
-
-    let randomBonusZone = AreaPlayerTriggerService.Get('randomBonusZone');
-    randomBonusZone.Tags = ['randombonus'];
-    randomBonusZone.Enable = true;
-    randomBonusZone.OnEnter.Add(function(player, area) {
-        const price = Number(area.Name) || 1000;
-        
-        if (player.Properties.Scores.Value >= price) {
-            player.Properties.Scores.Value -= price;
-            
-            const bonuses = [
-                { type: 'points', value: 5000, message: '5000 очков' },
-                { type: 'points', value: 10000, message: '10000 очков' },
-                { type: 'hp', value: 20, message: '+20 HP' },
-                { type: 'weapon', value: 'main', message: 'Основное оружие' },
-                { type: 'weapon', value: 'secondary', message: 'Вторичное оружие' },
-                { type: 'income', value: 5, message: '+5 к пассивному доходу' }
-            ];
-            
-            const bonus = bonuses[Math.floor(Math.random() * bonuses.length)];
-            
-            switch(bonus.type) {
-                case 'points':
-                    player.Properties.Scores.Value += bonus.value;
-                    break;
-                case 'hp':
-                    player.contextedProperties.MaxHp.Value += bonus.value;
-                    player.Spawns.Spawn();
-                    break;
-                case 'weapon':
-                    if (bonus.value === 'main') {
-                        player.inventory.Main.Value = true;
-                    } else {
-                        player.inventory.Secondary.Value = true;
-                    }
-                    break;
-                case 'income':
-                    player.Properties.Get('PassiveIncome').Value += bonus.value;
-                    if (!player.Timers.Get('passiveIncome').IsActive) {
-                        player.Timers.Get('passiveIncome').RestartLoop(10);
-                    }
-                    break;
-            }
-            
-            player.PopUp(`Вы получили бонус: ${bonus.message}! (Стоимость: ${price} очков)`);
-        } else {
-            player.PopUp(`Вам нужно ${price} очков для получения случайного бонуса`);
-        }
-    });
-
-    let randomBonusZoneView = AreaViewService.GetContext().Get('randomBonusZoneView');
-    randomBonusZoneView.Color = rainbowColor;
-    randomBonusZoneView.Tags = ['randombonus'];
-    randomBonusZoneView.Enable = true;
 }
 
 function setupWeaponZones() {
@@ -592,7 +421,7 @@ function setupWeaponZones() {
         { tag: '3*', type: 'Бесконечные гранаты', price: 30000, color: weaponColor, property: 'ExplosiveInfinity' },
         { tag: '4', type: 'Блоки', price: 1000, color: weaponColor, property: 'Build', infinityProperty: 'BuildInfinity' },
         { tag: '4*', type: 'Бесконечные блоки', price: 2000, color: weaponColor, property: 'BuildInfinity' },
-        { tag: '5', type: 'Холодное оружие', price: 500, color: weaponColor, property: 'Melee' }
+        { tag: '5', type: 'Нож', price: 500, color: weaponColor, property: 'Melee' }
     ];
 
     weapons.forEach(weapon => {
@@ -637,64 +466,137 @@ function setupWeaponZones() {
 initializeZones();
 setupWeaponZones();
 
-// Система чат-команд
-Chat.OnPlayerMessage.Add(function(player, message) {
-    const command = message.toLowerCase().trim();
-    
-    // Команда помощи
-    if (command === '/help') {
-        player.PopUp(`📖 ДОСТУПНЫЕ КОМАНДЫ:
+function showHelp(player, page) {
+    switch(page) {
+        case 1:
+            player.PopUp(`📖 КОМАНДЫ ПОМОЩИ (1/3)
 
 👤 ОСНОВНЫЕ КОМАНДЫ:
 /help - показывает это сообщение
 /scores - показывает ваши очки
 /status - показывает вашу статистику
-/fly - включает/выключает полет (админ)
+/zones - показывает помощь по зонам
+/fly - включает полет (админ)
 /weapons - выдает все оружия (админ)
-/build - включает/выключает режим строительства (админ)
+/build - включает режим строительства (админ)
 /pos - показывает вашу позицию
-/tp [x] [y] [z] - телепортирует вас на координаты (админ)
+/tp [x] [y] [z] - телепортирует вас (админ)
 /spawn - возвращает на спавн
-/clear - очищает инвентарь (админ)
 
-🎮 ИГРОВЫЕ КОМАНДЫ:
+💡 Для продолжения введите /help 2`);
+            break;
+        case 2:
+            player.PopUp(`📖 КОМАНДЫ ПОМОЩИ (2/3)
+
+🎮 КОМАНДЫ УПРАВЛЕНИЯ:
 /skin [id] [skin] - меняет скин игроку (админ)
 /hp [id] [число] - устанавливает HP игроку (админ)
 /sethp [id] [hp] - устанавливает текущее HP (админ)
-/god [id] - включает/выключает бессмертие (админ)
-/vip [id] - включает/выключает VIP статус (админ)
-/passiveincome [id] [число] - устанавливает пассивный доход (админ)
+/setmaxhp [id] [hp] - устанавливает макс HP (админ)
+/god [id] - включает бессмертие (админ)
+/vip [id] - включает VIP статус (админ)
+/passiveincome [id] [число] - устанавливает доход (админ)
 
 💰 КОМАНДЫ ОЧКОВ:
 /give [id] [очки] - выдает очки игроку (админ)
-/reset [id] - сбрасывает статистику игрока (админ)
+/reset [id] - сбрасывает статистику (админ)
+
+💡 Для продолжения введите /help 3`);
+            break;
+        case 3:
+            player.PopUp(`📖 КОМАНДЫ ПОМОЩИ (3/3)
 
 👥 АДМИН КОМАНДЫ:
 /admin [id] - выдает права администратора
 /ban [id] - банит игрока
 /unban [id] - разбанивает игрока
-/setpos [id] [x] [y] [z] - телепортирует игрока (админ)
-/setspawn [x] [y] [z] - устанавливает точку спавна (админ)
+/kick [id] - кикает игрока
+/setpos [id] [x] [y] [z] - телепортирует игрока
+/setspawn [x] [y] [z] - устанавливает спавн
+
+🤖 КОМАНДЫ БОТОВ:
+/addbot - добавляет бота
+/removebots - удаляет ботов
 
 ⚙️ СИСТЕМНЫЕ КОМАНДЫ:
-/clearall [id] - очищает все данные игрока (админ)
+/clearall [id] - очищает данные игрока
+/stop - останавливает сервер
 
-📝 ПРИМЕРЫ:
-/skin 2 1 - выдает скин зомби игроку с RoomID 2
-/give 3 1000 - выдает 1000 очков игроку с RoomID 3
-/setpos 4 100 50 200 - телепортирует игрока с RoomID 4
+💡 RoomID можно узнать в таблице лидеров`);
+            break;
+    }
+}
 
-💡 ID игрока - это его RoomID (можно узнать в таблице лидеров)`);
+function showZonesHelp(player) {
+    player.PopUp(`🎯 ПОМОЩЬ ПО ЗОНАМ
+
+🏥 ЗОНА HP:
+• Тег: hpZone
+• Покупка здоровья
+• Цена настраивается через название зоны
+• Формат: hp@цена
+
+🎭 ЗОНА СКИНОВ:
+• Тег: skinZone  
+• Покупка скинов
+• Цена настраивается через название зоны
+• Формат: номер_скина@цена
+
+💰 ЗОНА ФАРМА:
+• Тег: farmZone
+• Автоматическая выдача очков
+• Количество настраивается через название зоны
+
+🏠 ЗОНА СПАВНА:
+• Тег: spawnZone
+• Возврат на точку спавна
+
+📈 ЗОНА ДОХОДА:
+• Тег: passiveIncomeZone
+• Покупка пассивного дохода
+• Формат: название@доход@цена
+
+⭐ ЗОНА VIP:
+• Тег: vipZone
+• Покупка VIP статуса
+• Цена настраивается через название зоны
+
+🔫 ЗОНЫ ОРУЖИЯ:
+• Теги: weapon1, weapon2, weapon3, weapon4, weapon5
+• Покупка оружия и бесконечных патронов
+• Цены настраиваются через названия зон
+
+💡 Все зоны должны быть визуализированы`);
+}
+
+Chat.OnPlayerMessage.Add(function(player, message) {
+    const command = message.toLowerCase().trim();
+    
+    if (command === '/help') {
+        showHelp(player, 1);
         return false;
     }
     
-    // Команда очков
+    if (command === '/help 2') {
+        showHelp(player, 2);
+        return false;
+    }
+    
+    if (command === '/help 3') {
+        showHelp(player, 3);
+        return false;
+    }
+    
+    if (command === '/zones') {
+        showZonesHelp(player);
+        return false;
+    }
+    
     if (command === '/scores') {
         player.PopUp(`💰 Ваши очки: ${player.Properties.Scores.Value}`);
         return false;
     }
     
-    // Команда статуса
     if (command === '/status') {
         player.PopUp(`📊 ВАША СТАТИСТИКА:
 🎯 Статус: ${player.Properties.Get('Status').Value}
@@ -711,7 +613,6 @@ Chat.OnPlayerMessage.Add(function(player, message) {
         return false;
     }
     
-    // Команда полета
     if (command === '/fly') {
         if (!isAdmin(player)) {
             player.PopUp('❌ У вас нет прав для использования этой команды!');
@@ -722,7 +623,6 @@ Chat.OnPlayerMessage.Add(function(player, message) {
         return false;
     }
     
-    // Команда всех оружий
     if (command === '/weapons') {
         if (!isAdmin(player)) {
             player.PopUp('❌ У вас нет прав для использования этой команды!');
@@ -741,7 +641,6 @@ Chat.OnPlayerMessage.Add(function(player, message) {
         return false;
     }
     
-    // Команда смены скина игроку
     if (command.startsWith('/skin ')) {
         if (!isAdmin(player)) {
             player.PopUp('❌ У вас нет прав для использования этой команды!');
@@ -759,7 +658,7 @@ Chat.OnPlayerMessage.Add(function(player, message) {
                 const skinNames = {
                     0: 'Стандартный',
                     1: 'Зомби', 
-                    2: 'Зек',
+                    2: 'Заключенный'
                 };
                 
                 const skinName = skinNames[skinId] || `Скин ${skinId}`;
@@ -774,14 +673,37 @@ Chat.OnPlayerMessage.Add(function(player, message) {
         return false;
     }
     
-    // Команда позиции
+    if (command.startsWith('/hp ')) {
+        if (!isAdmin(player)) {
+            player.PopUp('❌ У вас нет прав для использования этой команды!');
+            return false;
+        }
+        const parts = command.split(' ');
+        if (parts.length >= 3) {
+            const targetId = parseInt(parts[1]);
+            const hp = parseInt(parts[2]);
+            const target = Players.GetByRoomId(targetId);
+            
+            if (target && !isNaN(hp) && hp > 0) {
+                target.contextedProperties.MaxHp.Value = hp;
+                target.Spawns.Spawn();
+                player.PopUp(`❤️ Игроку ${target.NickName} установлено HP: ${hp}`);
+                target.PopUp(`❤️ Администратор установил вам HP: ${hp}`);
+            } else {
+                player.PopUp('❌ Игрок не найден или неверное число HP!');
+            }
+        } else {
+            player.PopUp('📝 Использование: /hp [RoomID] [количество_HP]');
+        }
+        return false;
+    }
+    
     if (command === '/pos') {
         const pos = player.Position;
         player.PopUp(`📍 Позиция: X=${Math.round(pos.x)}, Y=${Math.round(pos.y)}, Z=${Math.round(pos.z)}`);
         return false;
     }
     
-    // Команда телепортации
     if (command.startsWith('/tp ')) {
         if (!isAdmin(player)) {
             player.PopUp('❌ У вас нет прав для использования этой команды!');
@@ -804,33 +726,12 @@ Chat.OnPlayerMessage.Add(function(player, message) {
         return false;
     }
     
-    // Команда спавна
     if (command === '/spawn') {
         player.Spawns.Spawn();
         player.PopUp('🏠 Возврат на спавн...');
         return false;
     }
     
-    // Команда очистки инвентаря
-    if (command === '/clear') {
-        if (!isAdmin(player)) {
-            player.PopUp('❌ У вас нет прав для использования этой команды!');
-            return false;
-        }
-        player.inventory.Main.Value = false;
-        player.inventory.MainInfinity.Value = false;
-        player.inventory.Secondary.Value = false;
-        player.inventory.SecondaryInfinity.Value = false;
-        player.inventory.Explosive.Value = false;
-        player.inventory.ExplosiveInfinity.Value = false;
-        player.inventory.Melee.Value = false;
-        player.inventory.Build.Value = false;
-        player.inventory.BuildInfinity.Value = false;
-        player.PopUp('🎒 Инвентарь очищен!');
-        return false;
-    }
-    
-    // Команда выдачи админки
     if (command.startsWith('/admin ')) {
         if (!isAdmin(player)) {
             player.PopUp('❌ У вас нет прав для использования этой команды!');
@@ -850,7 +751,6 @@ Chat.OnPlayerMessage.Add(function(player, message) {
         return false;
     }
     
-    // Команда бана
     if (command.startsWith('/ban ')) {
         if (!isAdmin(player)) {
             player.PopUp('❌ У вас нет прав для использования этой команды!');
@@ -869,7 +769,6 @@ Chat.OnPlayerMessage.Add(function(player, message) {
         return false;
     }
     
-    // Команда разбана
     if (command.startsWith('/unban ')) {
         if (!isAdmin(player)) {
             player.PopUp('❌ У вас нет прав для использования этой команды!');
@@ -887,7 +786,6 @@ Chat.OnPlayerMessage.Add(function(player, message) {
         return false;
     }
     
-    // Команда выдачи очков
     if (command.startsWith('/give ')) {
         if (!isAdmin(player)) {
             player.PopUp('❌ У вас нет прав для использования этой команды!');
@@ -911,32 +809,6 @@ Chat.OnPlayerMessage.Add(function(player, message) {
         return false;
     }
     
-    // Команда установки максимального HP игроку
-    if (command.startsWith('/sethp ')) {
-        if (!isAdmin(player)) {
-            player.PopUp('❌ У вас нет прав для использования этой команды!');
-            return false;
-        }
-        const parts = command.split(' ');
-        if (parts.length >= 3) {
-            const targetId = parseInt(parts[1]);
-            const hp = parseInt(parts[2]);
-            const target = Players.GetByRoomId(targetId);
-            if (target && !isNaN(hp) && hp > 0) {
-                target.contextedProperties.MaxHp.Value = hp;
-                target.Spawns.Spawn();
-                player.PopUp(`❤️ HP игрока ${target.NickName} установлено на ${hp}`);
-                target.PopUp(`❤️ Администратор установил ваше HP на ${hp}`);
-            } else {
-                player.PopUp('❌ Игрок не найден или неверное число!');
-            }
-        } else {
-            player.PopUp('📝 Использование: /sethp [RoomID] [hp]');
-        }
-        return false;
-    }
-    
-    // Команда телепортации игрока
     if (command.startsWith('/setpos ')) {
         if (!isAdmin(player)) {
             player.PopUp('❌ У вас нет прав для использования этой команды!');
@@ -962,7 +834,6 @@ Chat.OnPlayerMessage.Add(function(player, message) {
         return false;
     }
     
-    // Команда установки спавна
     if (command.startsWith('/setspawn ')) {
         if (!isAdmin(player)) {
             player.PopUp('❌ У вас нет прав для использования этой команды!');
@@ -983,35 +854,9 @@ Chat.OnPlayerMessage.Add(function(player, message) {
             player.PopUp('📝 Использование: /setspawn [x] [y] [z]');
         }
         return false;
-    }
-    
-    // Команда установки времени
-    if (command.startsWith('/time ')) {
-        if (!isAdmin(player)) {
-            player.PopUp('❌ У вас нет прав для использования этой команды!');
-            return false;
-        }
-        const parts = command.split(' ');
-        if (parts.length >= 4) {
-            const hours = parseInt(parts[1]);
-            const minutes = parseInt(parts[2]);
-            const seconds = parseInt(parts[3]);
-            if (!isNaN(hours) && !isNaN(minutes) && !isNaN(seconds)) {
-                Props.Get('Time_Hours').Value = hours;
-                Props.Get('Time_Minutes').Value = minutes;
-                Props.Get('Time_Seconds').Value = seconds;
-                player.PopUp(`⏰ Время установлено на ${hours}:${minutes}:${seconds}`);
-            } else {
-                player.PopUp('📝 Использование: /time [ч] [м] [с]');
-            }
-        } else {
-            player.PopUp('📝 Использование: /time [ч] [м] [с]');
-        }
-        return false;
-    }
-    
-    // Команда бессмертия
-    if (command.startsWith('/god ')) {
+	}
+	
+	if (command.startsWith('/god ')) {
         if (!isAdmin(player)) {
             player.PopUp('❌ У вас нет прав для использования этой команды!');
             return false;
@@ -1030,7 +875,6 @@ Chat.OnPlayerMessage.Add(function(player, message) {
         return false;
     }
     
-    // Команда VIP статуса
     if (command.startsWith('/vip ')) {
         if (!isAdmin(player)) {
             player.PopUp('❌ У вас нет прав для использования этой команды!');
@@ -1050,7 +894,6 @@ Chat.OnPlayerMessage.Add(function(player, message) {
         return false;
     }
     
-    // Команда установки пассивного дохода
     if (command.startsWith('/passiveincome ')) {
         if (!isAdmin(player)) {
             player.PopUp('❌ У вас нет прав для использования этой команды!');
@@ -1077,7 +920,6 @@ Chat.OnPlayerMessage.Add(function(player, message) {
         return false;
     }
     
-    // Команда сброса статистики
     if (command.startsWith('/reset ')) {
         if (!isAdmin(player)) {
             player.PopUp('❌ У вас нет прав для использования этой команды!');
@@ -1101,7 +943,6 @@ Chat.OnPlayerMessage.Add(function(player, message) {
         return false;
     }
     
-    // Команда очистки всех данных
     if (command.startsWith('/clearall ')) {
         if (!isAdmin(player)) {
             player.PopUp('❌ У вас нет прав для использования этой команды!');
@@ -1110,7 +951,6 @@ Chat.OnPlayerMessage.Add(function(player, message) {
         const targetId = parseInt(command.split(' ')[1]);
         const target = Players.GetByRoomId(targetId);
         if (target) {
-            // Получаем все свойства и сбрасываем их
             const allProps = Props.GetAll();
             for (let prop of allProps) {
                 if (prop.Name.startsWith(`${target.id}_`)) {
@@ -1150,37 +990,14 @@ Chat.OnPlayerMessage.Add(function(player, message) {
         return false;
     }
     
-});
-
-// Обновление времени каждую секунду
-let seconds = 0;
-let minutes = 0;
-let hours = 0;
-
-Timers.Get('timeUpdate').RestartLoop(1);
-Timers.OnTimer.Add(function(timer) {
-    if (timer.Id === 'timeUpdate') {
-        seconds++;
-        if (seconds >= 60) {
-            seconds = 0;
-            minutes++;
-            if (minutes >= 60) {
-                minutes = 0;
-                hours++;
-                if (hours >= 24) {
-                    hours = 0;
-                }
-            }
+    if (command === '/stop') {
+        if (!isAdmin(player)) {
+            player.PopUp('❌ У вас нет прав для использования этой команды!');
+            return false;
         }
-        
-        Props.Get('Time_Hours').Value = hours;
-        Props.Get('Time_Minutes').Value = minutes;
-        Props.Get('Time_Seconds').Value = seconds;
-        
-        const timeString = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-        Props.Get('Time_FixedString').Value = timeString;
-        
-        // Обновление количества игроков
-        Props.Get('Players_Now').Value = Players.GetAll().length;
+        Game.Stop();
+        return false;
     }
+    
+    return true;
 });
