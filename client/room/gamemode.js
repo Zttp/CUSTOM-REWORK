@@ -1001,3 +1001,34 @@ Chat.OnPlayerMessage.Add(function(player, message) {
     
     return true;
 });
+
+let seconds = 0;
+let minutes = 0;
+let hours = 0;
+
+Timers.Get('timeUpdate').RestartLoop(1);
+Timers.OnTimer.Add(function(timer) {
+    if (timer.Id === 'timeUpdate') {
+        seconds++;
+        if (seconds >= 60) {
+            seconds = 0;
+            minutes++;
+            if (minutes >= 60) {
+                minutes = 0;
+                hours++;
+                if (hours >= 24) {
+                    hours = 0;
+                }
+            }
+        }
+        
+        Props.Get('Time_Hours').Value = hours;
+        Props.Get('Time_Minutes').Value = minutes;
+        Props.Get('Time_Seconds').Value = seconds;
+        
+        const timeString = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        Props.Get('Time_FixedString').Value = timeString;
+        
+        Props.Get('Players_Now').Value = Players.GetAll().length;
+    }
+});
